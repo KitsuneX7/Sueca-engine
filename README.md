@@ -21,20 +21,18 @@ Designed around 64-bit bitboard state representations, exact bipartite max-flow 
 
 ## 🏗️ Architecture & Pipeline
 
-┌─────────────────────────────────────────────────────────────┐
-│                       GameState                             │
-│  - Bitboards: Player hands, played cards, legal masks (u64) │
-│  - Trick state, current lead, trump suit, scoring LUTs      │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-            ┌──────────────────┴──────────────────┐
-            ▼                                     ▼
-┌──────────────────────────────┐     ┌────────────────────────┐
-│     Bipartite Max-Flow       │     │    Arena-Backed PIMC   │
-│  - Edmonds-Karp capacity     │───▶│  - Rayon parallelism   │
-│    matching across voids     │     │  - Zero hot-path alloc │
-│  - Monte Carlo diffusion     │     │  - Fast UCB exploration│
-└──────────────────────────────┘     └────────────────────────┘
+```mermaid
+graph TD
+    GS["<b>GameState</b><br/>• Bitboards: Player hands, played cards, legal masks (u64)<br/>• Trick state, current lead, trump suit, scoring LUTs"]
+    
+    BMF["<b>Bipartite Max-Flow</b><br/>• Edmonds-Karp capacity matching across voids<br/>• Monte Carlo diffusion"]
+    
+    PIMC["<b>Arena-Backed PIMC</b><br/>• Rayon parallelism<br/>• Zero hot-path alloc<br/>• Fast UCB exploration"]
+
+    GS --> BMF
+    GS --> PIMC
+    BMF --> PIMC
+```
 
 ---
 
