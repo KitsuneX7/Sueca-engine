@@ -1,0 +1,8 @@
+[package]
+name = "sueca"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = { version = "0.9", features = ["small_rng", "os_rng"] }
+rayon = "1.12.0"
