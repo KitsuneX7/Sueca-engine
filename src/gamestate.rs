@@ -218,13 +218,9 @@ impl GameState {
     #[inline]
     pub fn clear(&mut self) {
         self.current_player = Player::North;
-        for i in self.current_trick.iter_mut() {
-            *i = 0xFF;
-        }
+        for i in self.current_trick.iter_mut() { *i = 0xFF; }
         self.lead_suit = Suit::NO_LEAD;
-        for i in self.player_hands.iter_mut() {
-            *i = 0;
-        }
+        for i in self.player_hands.iter_mut() { *i = 0; }
         self.trump = Suit::Clubs;
         self.score = 0;
     }
@@ -232,23 +228,17 @@ impl GameState {
     #[inline]
     pub fn setup(&mut self, deck: [u8; 40], trump_card: u8) {
         self.distribute_hands(deck);
-        for i in self.current_trick.iter_mut() {
-            *i = 0xFF;
-        }
+        for i in self.current_trick.iter_mut() { *i = 0xFF; }
         self.lead_suit = Suit::NO_LEAD;
         self.score = 0;
         self.voids = 0;
-        self.current_player = Player::from_index(trump_card as usize).next();
-        self.trump = Suit::from_index(trump_card as usize);
+        self.current_player = Player::from_index((trump_card / 10) as usize).next();
+        self.trump = Suit::from_index(deck[trump_card as usize] as usize);
     }
 
     #[inline]
     pub fn score(&self, team: bool) -> u8 {
-        if team {
-            self.score
-        } else {
-            self.points_played() - self.score
-        }
+        if team { self.score } else { self.points_played() - self.score }
     }
 
     #[inline]

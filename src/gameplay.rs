@@ -59,7 +59,7 @@ impl GamePlay {
         let deck = self.new_deck();
         let trump_card = self.rng.random_range(0..40);
         self.gamestate.setup(deck, trump_card);
-        Card::from_index(trump_card as usize)
+        Card::from_index(deck[trump_card as usize] as usize)
     }
 
     #[inline]
