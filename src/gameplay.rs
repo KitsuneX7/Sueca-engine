@@ -88,7 +88,7 @@ impl GamePlay {
                 .select_card::<PRINT_ON>(&self.gamestate, &mut self.rng);
             self.gamestate.make_move(choice);
             if PRINT_ON {
-                let min_delay = Duration::from_millis(100);
+                let min_delay = Duration::from_millis(200);
                 let elapsed = start.unwrap().elapsed();
                 if elapsed < min_delay {
                     sleep(min_delay - elapsed);
