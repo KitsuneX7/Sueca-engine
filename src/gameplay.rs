@@ -17,20 +17,14 @@ pub struct GamePlay {
 }
 
 impl GamePlay {
+
     const BASE_DECK: [u8; 40] = [
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
         25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
     ];
 
     pub fn new(to_win: u8, agents: [Agent; 4]) -> Self {
-        Self {
-            to_win,
-            round: 0,
-            wins: [0, 0],
-            gamestate: GameState::new(),
-            agents,
-            rng: SmallRng::from_os_rng(),
-        }
+        Self { to_win, round: 0, wins: [0, 0], gamestate: GameState::new(), agents, rng: SmallRng::from_os_rng() }
     }
 
     #[inline]

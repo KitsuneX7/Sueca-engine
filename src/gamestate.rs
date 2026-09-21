@@ -167,6 +167,7 @@ impl Default for GameState {
 }
 
 impl GameState {
+
     pub const DECK_MASK: u64 = 0x0000_00FF_FFFF_FFFF; // 40 cards total (bits 0..40)
     // 10 cards per suit, spaced every 4 bits: 0b0001 repeated 10 times
     pub const SUIT_STRIDE: u64 = 0x0000_0011_1111_1111;
@@ -812,4 +813,5 @@ impl GameState {
         println!("Team East/West: {}", self.score(false));
         println!();
     }
+    
 }
