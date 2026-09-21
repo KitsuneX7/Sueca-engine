@@ -151,9 +151,11 @@ impl fmt::Display for Suit {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct GameState {
     pub current_player: Player,
+    pub dealer: Player,
     pub four: u8,
     pub score: u8,
     pub trump: Suit,
+    pub trump_card: u8,
     pub current_trick: [u8; 4],
     pub player_hands: [u64; 4],
     pub voids: u16,
@@ -204,16 +206,8 @@ impl GameState {
     };
 
     pub fn new() -> Self {
-        GameState {
-            current_player: Player::North,
-            current_trick: [0xFF, 0xFF, 0xFF, 0xFF],
-            four: 0,
-            lead_suit: Suit::NO_LEAD,
-            player_hands: [0, 0, 0, 0],
-            score: 0,
-            trump: Suit::Clubs,
-            voids: 0,
-        }
+        GameState { current_player: Player::North, current_trick: [0xFF, 0xFF, 0xFF, 0xFF], four: 0, lead_suit: Suit::NO_LEAD,
+        player_hands: [0, 0, 0, 0], score: 0, trump: Suit::Clubs, trump_card: 0xFF, dealer: Player::North, voids: 0 }
     }
 
     #[inline]
@@ -227,14 +221,16 @@ impl GameState {
     }
 
     #[inline]
-    pub fn setup(&mut self, deck: [u8; 40], trump_card: u8) {
+    pub fn setup(&mut self, deck: [u8; 40], trump_card_idx: u8) {
         self.distribute_hands(deck);
         for i in self.current_trick.iter_mut() { *i = 0xFF; }
         self.lead_suit = Suit::NO_LEAD;
         self.score = 0;
         self.voids = 0;
-        self.current_player = Player::from_index((trump_card / 10) as usize).next();
-        self.trump = Suit::from_index(deck[trump_card as usize] as usize);
+        self.dealer = Player::from_index((trump_card_idx / 10) as usize);
+        self.current_player = self.dealer.next();
+        self.trump_card = deck[trump_card_idx as usize];
+        self.trump = Suit::from_index(self.trump_card as usize);
     }
 
     #[inline]
@@ -430,6 +426,7 @@ impl GameState {
     // --- Move management ---
 
     pub fn make_move(&mut self, card: u8) {
+        if card == self.trump_card { self.trump_card = 0xFF; }
         let player = self.current_player;
         let p_idx = player as usize;
         let suit = Suit::from_index(card as usize);
@@ -437,9 +434,7 @@ impl GameState {
             if self.lead_suit != suit as u8 {
                 self.voids |= 1 << ((p_idx << 2) + (self.lead_suit as usize));
             }
-        } else {
-            self.lead_suit = suit as u8;
-        }
+        } else { self.lead_suit = suit as u8; }
         self.player_hands[p_idx] &= !(1u64 << card);
         self.current_trick[p_idx] = card;
     }
@@ -473,8 +468,8 @@ impl GameState {
     // --- MCTS world generation ---
 
     #[inline]
-    fn setup_residual(&self, player: Player) -> [[u8; 9]; 9] {
-        let suit_counts = [
+    fn setup_residual(&self, player: Player, has_fixed_trump: bool) -> [[u8; 9]; 9] {
+        let mut suit_counts = [
             self.number_of_suits_in_hands(Suit::Clubs)
                 - self.number_of_suits_in_hand(player, Suit::Clubs),
             self.number_of_suits_in_hands(Suit::Spades)
@@ -484,6 +479,7 @@ impl GameState {
             self.number_of_suits_in_hands(Suit::Hearts)
                 - self.number_of_suits_in_hand(player, Suit::Hearts),
         ];
+        if has_fixed_trump { suit_counts[self.trump as usize] -= 1; }
         let mut residual = [[0u8; 9]; 9];
         residual[0][1..5].copy_from_slice(&suit_counts);
         for i in 0..4 {
@@ -499,7 +495,9 @@ impl GameState {
         let mut temp_player = player;
         for row in residual.iter_mut().take(8).skip(5) {
             temp_player = temp_player.next();
-            row[8] = self.number_of_cards_in_hand(temp_player);
+            let mut needed = self.number_of_cards_in_hand(temp_player);
+            if has_fixed_trump && temp_player == self.dealer { needed -= 1; }
+            row[8] = needed;
         }
         residual
     }
@@ -590,14 +588,19 @@ impl GameState {
 
     #[inline]
     pub fn generate_world(&self, player: Player, rng: &mut SmallRng) -> Self {
-        let mut cards_available = self.cards_in_hand(player.next())
-            | self.cards_in_hand(player.partner())
-            | self.cards_in_hand(player.prev());
-        let mut residual = self.setup_residual(player);
+        let has_fixed_trump = self.trump_card != 0xFF && self.dealer != player;
+        let mut cards_available = self.cards_in_hand(player.next()) | 
+        self.cards_in_hand(player.partner()) | self.cards_in_hand(player.prev());
         let mut new_world = *self;
         new_world.player_hands[player.next() as usize] = 0;
         new_world.player_hands[player.partner() as usize] = 0;
         new_world.player_hands[player.prev() as usize] = 0;
+        if has_fixed_trump {
+            let trump_bit = 1u64 << self.trump_card;
+            new_world.player_hands[self.dealer as usize] |= trump_bit;
+            cards_available &= !trump_bit;
+        }
+        let mut residual = self.setup_residual(player, has_fixed_trump);
         let mut distribution = GameState::max_flow(&mut residual);
         Self::diffuse_distribution(&mut distribution, &residual, rng, 24);
         for (i, row) in distribution.iter().enumerate() {

@@ -51,7 +51,10 @@ impl GamePlay {
     #[inline]
     pub fn setup(&mut self) -> Card {
         let deck = self.new_deck();
-        let trump_card = self.rng.random_range(0..40);
+        let trump_card = if self.round == 1 { self.rng.random_range(0..40) } else {
+            let prev_floor = self.gamestate.dealer.next() as u8 * 10;
+            self.rng.random_range(prev_floor..prev_floor + 10)
+        };
         self.gamestate.setup(deck, trump_card);
         Card::from_index(deck[trump_card as usize] as usize)
     }
@@ -85,7 +88,7 @@ impl GamePlay {
                 .select_card::<PRINT_ON>(&self.gamestate, &mut self.rng);
             self.gamestate.make_move(choice);
             if PRINT_ON {
-                let min_delay = Duration::from_millis(350);
+                let min_delay = Duration::from_millis(100);
                 let elapsed = start.unwrap().elapsed();
                 if elapsed < min_delay {
                     sleep(min_delay - elapsed);
@@ -114,9 +117,7 @@ impl GamePlay {
 
     #[inline]
     pub fn play_round<const PRINT_ON: bool>(&mut self) {
-        if PRINT_ON {
-            Self::clear_screen();
-        }
+        if PRINT_ON { Self::clear_screen(); }
         let card = self.setup();
         if PRINT_ON {
             println!("------- Round {} start -------", self.round);
@@ -129,9 +130,7 @@ impl GamePlay {
             );
             Self::pause("Press Enter to start playing...");
         }
-        for _ in 0..10 {
-            self.play_trick::<PRINT_ON>();
-        }
+        for _ in 0..10 { self.play_trick::<PRINT_ON>(); }
         if PRINT_ON {
             Self::clear_screen();
             println!("Round {} over", self.round);
