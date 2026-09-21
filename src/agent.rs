@@ -132,18 +132,10 @@ pub struct MCTSAgent {
 }
 
 impl MCTSAgent {
-    
+
     pub fn new(con: f32, i: u32, s: u8, p: Player) -> Self {
-        Self {
-            arena: Vec::with_capacity(0xFFFF),
-            path: [u32::MAX; 40],
-            path_len: 0,
-            rng: SmallRng::from_os_rng(),
-            c: con,
-            max_iter: i,
-            max_sims: s,
-            player: p,
-        }
+        Self { arena: Vec::with_capacity(0xFFFF),path: [u32::MAX; 40], path_len: 0, 
+        rng: SmallRng::from_os_rng(), c: con, max_iter: i, max_sims: s, player: p }
     }
 
     #[inline]
@@ -154,19 +146,13 @@ impl MCTSAgent {
     #[inline]
     fn apply_move_step(&self, state: &mut GameState, card: u8) {
         state.make_move(card);
-        if state.is_trick_complete() {
-            state.resolve_trick();
-        } else {
-            state.current_player = state.current_player.next();
-        }
+        if state.is_trick_complete() { state.resolve_trick(); } else { state.current_player = state.current_player.next(); }
     }
 
     #[inline]
     fn calculate_ucb(&self, child_idx: usize, ln_parent_visits: f32) -> f32 {
         let child = &self.arena[child_idx];
-        if child.total_visits == 0 {
-            return f32::INFINITY;
-        }
+        if child.total_visits == 0 { return f32::INFINITY; }
         let exploitation = child.wins / child.total_visits as f32;
         let exploration = self.c * (ln_parent_visits / child.total_visits as f32).sqrt();
         exploitation + exploration
@@ -202,9 +188,7 @@ impl MCTSAgent {
     }
 
     pub fn expansion(&mut self, parent_idx: usize, state: &GameState) {
-        if state.number_of_cards_in_hands() == 0 {
-            return;
-        }
+        if state.number_of_cards_in_hands() == 0 { return; }
         let acting_player = state.current_player;
         let mut legal_moves = state.legal_moves(acting_player);
         let first_child = self.arena.len() as u32;
@@ -230,11 +214,8 @@ impl MCTSAgent {
             let node = &mut self.arena[node_idx as usize];
             node.total_visits += 1;
             node.wins += 0.5;
-            if !(((node.player as u8 & 1) == (self.player as u8 & 1)) ^ win) {
-                node.wins += score as f32 / 8.0;
-            } else {
-                node.wins -= score as f32 / 8.0;
-            }
+            if !(((node.player as u8 & 1) == (self.player as u8 & 1)) ^ win) { node.wins += score as f32 / 8.0; } 
+            else { node.wins -= score as f32 / 8.0; }
         }
     }
 
@@ -244,9 +225,7 @@ impl MCTSAgent {
         for _ in 0..self.max_iter {
             let mut scratch_state = *state;
             let leaf_idx = self.selection(&mut scratch_state);
-            if self.arena[leaf_idx].first_child == u32::MAX {
-                self.expansion(leaf_idx, &scratch_state);
-            }
+            if self.arena[leaf_idx].first_child == u32::MAX { self.expansion(leaf_idx, &scratch_state); }
             if self.arena[leaf_idx].num_children > 0 {
                 let child_idx = self.arena[leaf_idx].first_child as usize;
                 self.apply_move_step(&mut scratch_state, self.arena[child_idx].card_idx);
@@ -268,17 +247,12 @@ impl MCTSAgent {
     }
 
     pub fn play_mcts(&mut self, state: &GameState, legal_moves: u64) -> u8 {
-        if legal_moves.count_ones() == 1 {
-            return legal_moves.trailing_zeros() as u8;
-        }
+        if legal_moves.count_ones() == 1 { return legal_moves.trailing_zeros() as u8; }
         let total_consensus: [u32; 40] = (0..self.max_sims)
             .into_par_iter()
             .map_init(
                 || {
-                    (
-                        MCTSAgent::new(self.c, self.max_iter, 1, self.player),
-                        SmallRng::from_os_rng(),
-                    )
+                    (MCTSAgent::new(self.c, self.max_iter, 1, self.player), SmallRng::from_os_rng())
                 },
                 |(worker, rng), _| {
                     let world_state = state.generate_world(worker.player, rng);
@@ -287,12 +261,7 @@ impl MCTSAgent {
             )
             .reduce(
                 || [0u32; 40],
-                |mut acc, world_votes| {
-                    for i in 0..40 {
-                        acc[i] += world_votes[i];
-                    }
-                    acc
-                },
+                |mut acc, world_votes| { for i in 0..40 { acc[i] += world_votes[i]; } acc },
             );
         let mut best_card = legal_moves.trailing_zeros() as u8;
         let mut max_visits = 0;
