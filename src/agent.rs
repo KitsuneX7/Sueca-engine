@@ -132,6 +132,7 @@ pub struct MCTSAgent {
 }
 
 impl MCTSAgent {
+    
     pub fn new(con: f32, i: u32, s: u8, p: Player) -> Self {
         Self {
             arena: Vec::with_capacity(0xFFFF),
