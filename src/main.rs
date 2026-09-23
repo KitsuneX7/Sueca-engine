@@ -7,6 +7,6 @@ fn main() {
         Agent::MCTS(Box::new(MCTSAgent::new(1.41, 10000, 100, Player::South))),
         Agent::MCTS(Box::new(MCTSAgent::new(1.41, 10000, 100, Player::West))),
     ];
-    let mut game = GamePlay::new(4, agents);
+    let mut game = GamePlay::new(5, agents);
     game.play_game::<true>();
 }
