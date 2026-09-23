@@ -290,45 +290,47 @@ impl MCTSAgent {
         let played = state.cards_played();
         let my_hand = state.player_hands[self.player as usize];
         let trick_count = state.cards_in_current_trick();
-        let trump_suit_idx = state.trump as u8;
-        let trump_ace = (9 << 2) | trump_suit_idx;
-        let trump_ace_loose = (played & (1u64 << trump_ace)) == 0 && (my_hand & (1u64 << trump_ace)) == 0;
+        let is_leading = state.lead_suit == Suit::NO_LEAD;
         let mut safe_candidates = legal_moves;
-        let sevens = legal_moves & GameState::RANK_MASKS[3];
-        if sevens != 0 {
-            let mut s = sevens;
-            while s != 0 {
-                let card = s.trailing_zeros() as u8;
-                s &= s - 1;
-                let card_suit = card & 3;
-                let is_trump = card_suit == trump_suit_idx;
-                if state.lead_suit == Suit::NO_LEAD {
-                    let suit_ace = (9 << 2) | card_suit;
-                    let ace_loose = (played & (1u64 << suit_ace)) == 0 && (my_hand & (1u64 << suit_ace)) == 0;
-                    if ace_loose { safe_candidates &= !(1u64 << card); }
-                } else if is_trump && state.lead_suit != trump_suit_idx {
-                    if trump_ace_loose && trick_count < 3 {
-                        let mut opp_behind_has_ace_threat = false;
+        let vulnerable_honors_mask = GameState::RANK_MASKS[0]  | GameState::RANK_MASKS[1] 
+        | GameState::RANK_MASKS[2] | GameState::RANK_MASKS[3];                       
+        let vulnerable_moves = legal_moves & vulnerable_honors_mask;
+        if vulnerable_moves != 0 && (is_leading || trick_count < 3) {
+            let mut v = vulnerable_moves;
+            while v != 0 {
+                let card = v.trailing_zeros() as u8;
+                v &= v - 1;
+                let rank = (card >> 2) % 10;
+                let suit = card & 3;
+                let is_trump = suit == state.trump as u8;
+                let is_cutting = !is_leading && is_trump && state.lead_suit != state.trump as u8;
+                let mut higher_card_loose = false;
+                for higher_rank in (rank + 1)..=9 {
+                    let higher_card = (higher_rank << 2) | suit;
+                    let unplayed = (played & (1u64 << higher_card)) == 0;
+                    let in_my_hand = (my_hand & (1u64 << higher_card)) != 0;
+                    if unplayed && !in_my_hand {
+                        higher_card_loose = true;
+                        break;
+                    }
+                }
+                if higher_card_loose {
+                    if is_cutting {
+                        let mut opp_can_overtrump = false;
                         let mut nxt = self.player.next();
                         while state.current_trick[nxt as usize] == 0xFF {
                             if nxt != self.player.partner() {
                                 if state.is_void(nxt, Suit::from_index(state.lead_suit as usize))
                                     && !state.is_void(nxt, state.trump)
                                 {
-                                    opp_behind_has_ace_threat = true;
+                                    opp_can_overtrump = true;
                                     break;
                                 }
                             }
                             nxt = nxt.next();
                         }
-                        if opp_behind_has_ace_threat { safe_candidates &= !(1u64 << card); }
-                    }
-                } else {
-                    if trick_count < 3 {
-                        let suit_ace = (9 << 2) | card_suit;
-                        let ace_loose = (played & (1u64 << suit_ace)) == 0 && (my_hand & (1u64 << suit_ace)) == 0;
-                        if ace_loose { safe_candidates &= !(1u64 << card); }
-                    }
+                        if opp_can_overtrump { safe_candidates &= !(1u64 << card); }
+                    } else { safe_candidates &= !(1u64 << card); }
                 }
             }
         }
