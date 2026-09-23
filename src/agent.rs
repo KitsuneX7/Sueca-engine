@@ -295,22 +295,40 @@ impl MCTSAgent {
         let trump_ace_loose = (played & (1u64 << trump_ace)) == 0 && (my_hand & (1u64 << trump_ace)) == 0;
         let mut safe_candidates = legal_moves;
         let sevens = legal_moves & GameState::RANK_MASKS[3];
-        if sevens != 0 && (trick_count == 0 || trick_count < 3) {
+        if sevens != 0 {
             let mut s = sevens;
             while s != 0 {
                 let card = s.trailing_zeros() as u8;
                 s &= s - 1;
                 let card_suit = card & 3;
                 let is_trump = card_suit == trump_suit_idx;
-                if !is_trump {
+                if state.lead_suit == Suit::NO_LEAD {
                     let suit_ace = (9 << 2) | card_suit;
                     let ace_loose = (played & (1u64 << suit_ace)) == 0 && (my_hand & (1u64 << suit_ace)) == 0;
                     if ace_loose { safe_candidates &= !(1u64 << card); }
+                } else if is_trump && state.lead_suit != trump_suit_idx {
+                    if trump_ace_loose && trick_count < 3 {
+                        let mut opp_behind_has_ace_threat = false;
+                        let mut nxt = self.player.next();
+                        while state.current_trick[nxt as usize] == 0xFF {
+                            if nxt != self.player.partner() {
+                                if state.is_void(nxt, Suit::from_index(state.lead_suit as usize))
+                                    && !state.is_void(nxt, state.trump)
+                                {
+                                    opp_behind_has_ace_threat = true;
+                                    break;
+                                }
+                            }
+                            nxt = nxt.next();
+                        }
+                        if opp_behind_has_ace_threat { safe_candidates &= !(1u64 << card); }
+                    }
                 } else {
-                    let is_cutting = state.lead_suit != Suit::NO_LEAD && state.lead_suit != trump_suit_idx;
-                    if is_cutting {
-                        if trump_ace_loose { safe_candidates &= !(1u64 << card); }
-                    } else if trump_ace_loose { safe_candidates &= !(1u64 << card); }
+                    if trick_count < 3 {
+                        let suit_ace = (9 << 2) | card_suit;
+                        let ace_loose = (played & (1u64 << suit_ace)) == 0 && (my_hand & (1u64 << suit_ace)) == 0;
+                        if ace_loose { safe_candidates &= !(1u64 << card); }
+                    }
                 }
             }
         }
