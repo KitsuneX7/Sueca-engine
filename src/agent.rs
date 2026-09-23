@@ -159,18 +159,33 @@ impl MCTSAgent {
     }
 
     #[inline]
-    pub fn select_best_child_ucb(&self, parent_idx: usize) -> usize {
+    pub fn select_best_child_ucb(&mut self, parent_idx: usize) -> usize {
         let parent = &self.arena[parent_idx];
         let start = parent.first_child as usize;
         let end = start + parent.num_children as usize;
         let ln_parent_visits = (parent.total_visits as f32).ln();
-        (start..end)
-            .max_by(|&a_idx, &b_idx| {
-                let ucb_a = self.calculate_ucb(a_idx, ln_parent_visits);
-                let ucb_b = self.calculate_ucb(b_idx, ln_parent_visits);
-                ucb_a.total_cmp(&ucb_b)
-            })
-            .expect("parent has at least one child")
+        let mut best_child = start;
+        let mut best_score = f32::NEG_INFINITY;
+        let mut unvisited = [0usize; 40];
+        let mut unvisited_count = 0;
+        for idx in start..end {
+            let child = &self.arena[idx];
+            if child.total_visits == 0 {
+                unvisited[unvisited_count] = idx;
+                unvisited_count += 1;
+            } else {
+                let ucb = self.calculate_ucb(idx, ln_parent_visits);
+                if ucb > best_score {
+                    best_score = ucb;
+                    best_child = idx;
+                }
+            }
+        }
+        if unvisited_count > 0 {
+            let pick = self.rng.random_range(0..unvisited_count);
+            return unvisited[pick];
+        }
+        best_child
     }
 
     pub fn selection(&mut self, state: &mut GameState) -> usize {
@@ -210,12 +225,13 @@ impl MCTSAgent {
     }
 
     pub fn backpropagation(&mut self, win: bool, score: u8) {
+        let winning_team = if win { self.player as u8 & 1 } else { (self.player as u8 & 1) ^ 1 };
         for &node_idx in &self.path[..self.path_len] {
             let node = &mut self.arena[node_idx as usize];
             node.total_visits += 1;
-            node.wins += 0.5;
-            if !(((node.player as u8 & 1) == (self.player as u8 & 1)) ^ win) { node.wins += score as f32 / 8.0; } 
-            else { node.wins -= score as f32 / 8.0; }
+            let node_team = node.player as u8 & 1;
+            let delta = (score as f32) / 8.0;
+            if node_team == winning_team { node.wins += 0.5 + delta; } else { node.wins += 0.5 - delta; }
         }
     }
 
@@ -227,9 +243,9 @@ impl MCTSAgent {
             let leaf_idx = self.selection(&mut scratch_state);
             if self.arena[leaf_idx].first_child == u32::MAX { self.expansion(leaf_idx, &scratch_state); }
             if self.arena[leaf_idx].num_children > 0 {
-                let child_idx = self.arena[leaf_idx].first_child as usize;
-                self.apply_move_step(&mut scratch_state, self.arena[child_idx].card_idx);
-                self.path[self.path_len] = child_idx as u32;
+                let chosen_child = self.select_best_child_ucb(leaf_idx);
+                self.apply_move_step(&mut scratch_state, self.arena[chosen_child].card_idx);
+                self.path[self.path_len] = chosen_child as u32;
                 self.path_len += 1;
             }
             let (win, score) = self.simulation(&mut scratch_state);
@@ -252,7 +268,10 @@ impl MCTSAgent {
             .into_par_iter()
             .map_init(
                 || {
-                    (MCTSAgent::new(self.c, self.max_iter, 1, self.player), SmallRng::from_os_rng())
+                    (
+                        MCTSAgent::new(self.c, self.max_iter, 1, self.player),
+                        SmallRng::from_os_rng(),
+                    )
                 },
                 |(worker, rng), _| {
                     let world_state = state.generate_world(worker.player, rng);
@@ -261,11 +280,44 @@ impl MCTSAgent {
             )
             .reduce(
                 || [0u32; 40],
-                |mut acc, world_votes| { for i in 0..40 { acc[i] += world_votes[i]; } acc },
+                |mut acc, world_votes| {
+                    for i in 0..40 {
+                        acc[i] += world_votes[i];
+                    }
+                    acc
+                },
             );
-        let mut best_card = legal_moves.trailing_zeros() as u8;
+        let played = state.cards_played();
+        let my_hand = state.player_hands[self.player as usize];
+        let trick_count = state.cards_in_current_trick();
+        let trump_suit_idx = state.trump as u8;
+        let trump_ace = (9 << 2) | trump_suit_idx;
+        let trump_ace_loose = (played & (1u64 << trump_ace)) == 0 && (my_hand & (1u64 << trump_ace)) == 0;
+        let mut safe_candidates = legal_moves;
+        let sevens = legal_moves & GameState::RANK_MASKS[3];
+        if sevens != 0 && (trick_count == 0 || trick_count < 3) {
+            let mut s = sevens;
+            while s != 0 {
+                let card = s.trailing_zeros() as u8;
+                s &= s - 1;
+                let card_suit = card & 3;
+                let is_trump = card_suit == trump_suit_idx;
+                if !is_trump {
+                    let suit_ace = (9 << 2) | card_suit;
+                    let ace_loose = (played & (1u64 << suit_ace)) == 0 && (my_hand & (1u64 << suit_ace)) == 0;
+                    if ace_loose { safe_candidates &= !(1u64 << card); }
+                } else {
+                    let is_cutting = state.lead_suit != Suit::NO_LEAD && state.lead_suit != trump_suit_idx;
+                    if is_cutting {
+                        if trump_ace_loose { safe_candidates &= !(1u64 << card); }
+                    } else if trump_ace_loose { safe_candidates &= !(1u64 << card); }
+                }
+            }
+        }
+        let valid_moves = if safe_candidates != 0 { safe_candidates } else { legal_moves };
+        let mut best_card = valid_moves.trailing_zeros() as u8;
         let mut max_visits = 0;
-        let mut moves = legal_moves;
+        let mut moves = valid_moves;
         while moves > 0 {
             let card_idx = (63 - moves.leading_zeros()) as u8;
             moves ^= 1u64 << card_idx;
@@ -277,5 +329,6 @@ impl MCTSAgent {
         }
         best_card
     }
-    
+
 }
+    

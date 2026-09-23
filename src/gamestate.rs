@@ -694,28 +694,38 @@ impl GameState {
                     }
                     p = p.next();
                 }
-                let partner_winning =
-                    best_card != 0xFF && best_player == self.current_player.partner();
-                let can_win = (0..moves.count_ones())
-                    .fold((false, moves), |(won, m), _| {
-                        let card = m.trailing_zeros() as u8;
-                        (won || self.card_beats_trick(card, best_card), m & (m - 1))
-                    })
-                    .0;
+                let partner_winning = best_card != 0xFF && best_player == self.current_player.partner();
+                let mut winning_moves = 0u64;
+                let mut m = moves;
+                while m != 0 {
+                    let card = m.trailing_zeros() as u8;
+                    m &= m - 1;
+                    if self.card_beats_trick(card, best_card) { winning_moves |= 1u64 << card; }
+                }
+                let can_win = winning_moves != 0;
                 let trash = moves & !GameState::RANK_MASKS[3] & !GameState::RANK_MASKS[4];
-                if best_card != 0xFF && !partner_winning && !can_win && trash != 0 {
+                let trick_cards = self.cards_in_current_trick();
+                if best_card != 0xFF && !partner_winning {
+                    if can_win {
+                        filtered = winning_moves;
+                    } else if trash != 0 {
+                        filtered = trash;
+                    }
+                } else if partner_winning && trash != 0 {
                     filtered = trash;
-                } else {
+                }
+                let sevens = filtered & GameState::RANK_MASKS[3];
+                if sevens != 0 && trick_cards < 3 {
                     let played = self.cards_played();
-                    let mut safe = moves;
-                    let sevens = moves & GameState::RANK_MASKS[3];
+                    let my_hand = self.player_hands[self.current_player as usize];
+                    let mut safe = filtered;
                     let mut s = sevens;
                     while s != 0 {
                         let card = s.trailing_zeros() as u8;
                         s &= s - 1;
                         let suit = card & 3;
                         let ace = (9 << 2) | suit;
-                        let ace_loose = (played & (1u64 << ace)) == 0;
+                        let ace_loose = (played & (1u64 << ace)) == 0 && (my_hand & (1u64 << ace)) == 0;
                         let mut opp_trumps = false;
                         if Suit::from_index(suit as usize) != self.trump {
                             let mut nxt = self.current_player.next();
@@ -731,21 +741,15 @@ impl GameState {
                                 nxt = nxt.next();
                             }
                         }
-                        if ace_loose || opp_trumps {
-                            safe &= !(1u64 << card);
-                        }
+                        if ace_loose || opp_trumps { safe &= !(1u64 << card); }
                     }
-                    if safe != 0 {
-                        filtered = safe;
-                    }
+                    if safe != 0 { filtered = safe; }
                 }
             }
             let count = filtered.count_ones();
             let target_idx = rng.random_range(0..count);
             let mut m = filtered;
-            for _ in 0..target_idx {
-                m &= m - 1;
-            }
+            for _ in 0..target_idx { m &= m - 1; }
             let card = m.trailing_zeros() as u8;
             self.make_move(card);
             self.current_player = self.current_player.next();
