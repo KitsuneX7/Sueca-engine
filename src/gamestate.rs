@@ -212,12 +212,15 @@ impl GameState {
 
     #[inline]
     pub fn clear(&mut self) {
-        self.current_player = Player::North;
         for i in self.current_trick.iter_mut() { *i = 0xFF; }
         self.lead_suit = Suit::NO_LEAD;
-        for i in self.player_hands.iter_mut() { *i = 0; }
-        self.trump = Suit::Clubs;
         self.score = 0;
+        self.voids = 0;
+        self.four = 0;
+        self.dealer = Player::North;
+        self.current_player = Player::East;
+        self.trump_card = 0;
+        self.trump = Suit::Clubs;
     }
 
     #[inline]
@@ -227,6 +230,7 @@ impl GameState {
         self.lead_suit = Suit::NO_LEAD;
         self.score = 0;
         self.voids = 0;
+        self.four = 0;
         self.dealer = Player::from_index((trump_card_idx / 10) as usize);
         self.current_player = self.dealer.next();
         self.trump_card = deck[trump_card_idx as usize];
@@ -448,7 +452,8 @@ impl GameState {
         let points = self.points_in_trick();
         if winner == Player::North || winner == Player::South {
             self.score += points;
-        }
+            self.four |= 1;
+        } else { self.four |= 2; }
         self.current_player = winner;
         self.lead_suit = Suit::NO_LEAD;
         self.current_trick = [0xFF, 0xFF, 0xFF, 0xFF];
@@ -457,11 +462,7 @@ impl GameState {
     #[inline]
     pub fn round_score(&self) -> (u8, u8) {
         let (team, mut pts) = Self::SCORE_LUT[self.score as usize];
-        if pts == 4
-            && ((self.score == 120 && self.four != 1) || (self.score == 0 && self.four != 2))
-        {
-            pts = 2;
-        }
+        if pts == 4 && ((self.score == 120 && self.four != 1) || (self.score == 0 && self.four != 2)) { pts = 2; }
         (team, pts)
     }
 
