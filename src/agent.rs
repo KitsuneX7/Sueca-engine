@@ -134,7 +134,7 @@ pub struct MCTSAgent {
 impl MCTSAgent {
 
     pub fn new(con: f32, i: u32, s: u8, p: Player) -> Self {
-        Self { arena: Vec::with_capacity(0xFFFF),path: [u32::MAX; 40], path_len: 0, 
+        Self { arena: Vec::with_capacity(0xFFFF), path: [u32::MAX; 40], path_len: 0, 
         rng: SmallRng::from_os_rng(), c: con, max_iter: i, max_sims: s, player: p }
     }
 
