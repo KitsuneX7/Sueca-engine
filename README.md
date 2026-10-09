@@ -66,7 +66,8 @@ Clone the repository and run the engine in release mode:
 ```bash
 git clone [https://github.com/KitsuneX7/Sueca-engine.git](https://github.com/KitsuneX7/Sueca-engine.git)
 cd Sueca-engine
-cargo run --release
+cargo install --path .
+sueca play (you can use --help to check args for custom games)
 ```
 
 ## 🎮 Interactive CLI Play
