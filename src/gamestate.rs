@@ -2,17 +2,6 @@ use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::fmt;
 
-#[derive(Copy, Clone, Debug)]
-pub struct UndoToken {
-    pub card: u8,
-    pub player: Player,
-    pub lead_suit: u8,
-    pub previous_trick: [u8; 4],
-    pub previous_score: u8,
-    pub previous_voids: u16,
-    pub trick_completed: bool,
-}
-
 #[repr(u8)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Card {
