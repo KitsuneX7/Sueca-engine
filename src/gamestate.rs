@@ -254,7 +254,7 @@ impl GameState {
                 self.player_hands[i] |= 1 << card;
             }
         }
-    }
+    } 
 
     #[inline]
     pub fn is_void(&self, player: Player, suit: Suit) -> bool {
